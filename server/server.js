@@ -37,6 +37,10 @@ app.get("/", (req, res) => {
     res.send("Track Finance Backend Running");
 });
 
+// Server Routes
+const incomeRoutes = require("./routes/incomeRoutes");
+app.use("/api/income", incomeRoutes);
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
