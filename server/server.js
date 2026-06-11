@@ -28,7 +28,7 @@ app.use("/api/expenses", expenseRoutes);
 const goalRoutes = require("./routes/goalRoutes");
 app.use("/api/goals", goalRoutes);
 
-// ✅ Budget Routes
+// Budget Routes
 const budgetRoutes = require("./routes/budgetRoutes");
 app.use("/api/budgets", budgetRoutes);
 
