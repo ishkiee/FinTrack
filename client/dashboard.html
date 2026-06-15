@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | FinTrack</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <a href="dashboard.html" class="logo">FinTrack</a>
+    <nav>
+        <a href="dashboard.html" class="active">Dashboard</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="income.html">Income</a>
+        <a href="goals.html">Goals</a>
+        <a href="budgets.html">Budgets</a>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </nav>
+</div>
+
+<div class="container">
+    <p class="page-title" id="greeting">Dashboard</p>
+
+    <!-- Summary Grid -->
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="label">This Month Expenses</div>
+            <div class="value" id="totalExpenses">—</div>
+            <div class="change" id="expenseChange"></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">This Month Income</div>
+            <div class="value" id="totalIncome">—</div>
+            <div class="change" id="incomeChange"></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Savings</div>
+            <div class="value" id="savings">—</div>
+            <div class="change" id="savingsRate"></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Active Goals</div>
+            <div class="value" id="activeGoals">—</div>
+            <div class="change" id="totalGoals"></div>
+        </div>
+    </div>
+
+    <!-- Budget Overview -->
+    <div class="card">
+        <h3>Budget Overview</h3>
+        <div class="summary-grid" style="margin-bottom:0;">
+            <div>
+                <div class="label">Total Budget</div>
+                <div class="value" id="totalBudget">—</div>
+            </div>
+            <div>
+                <div class="label">Spent</div>
+                <div class="value" id="budgetSpent">—</div>
+            </div>
+            <div>
+                <div class="label">Remaining</div>
+                <div class="value" id="budgetRemaining">—</div>
+            </div>
+        </div>
+        <div class="progress-bar-wrapper" style="margin-top:16px;">
+            <div class="progress-bar" id="budgetProgress" style="width:0%;"></div>
+        </div>
+    </div>
+
+    <!-- Breach Alerts -->
+    <div class="card" id="breachCard" style="display:none;">
+        <h3>⚠️ Budget Alerts</h3>
+        <div id="breachAlerts"></div>
+    </div>
+
+    <!-- Insights -->
+    <div class="card">
+        <h3>Insights</h3>
+        <div id="insights"><div class="empty-state">No insights yet</div></div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user) {
+        document.getElementById('greeting').textContent = `Welcome, ${user.name} 👋`;
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'login.html';
+    }
+
+    function formatINR(amount) {
+        return '₹' + Number(amount).toLocaleString('en-IN');
+    }
+
+    async function loadDashboard() {
+        try {
+            const res = await fetch('http://localhost:5000/api/dashboard', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            // Expenses
+            document.getElementById('totalExpenses').textContent = formatINR(data.expenses.thisMonth);
+            document.getElementById('expenseChange').textContent = data.expenses.change;
+
+            // Income
+            document.getElementById('totalIncome').textContent = formatINR(data.income.thisMonth);
+            document.getElementById('incomeChange').textContent = data.income.change;
+
+            // Savings
+            document.getElementById('savings').textContent = formatINR(data.savings.thisMonth);
+            document.getElementById('savingsRate').textContent = `Savings rate: ${data.savings.savingsRate}`;
+
+            // Goals
+            document.getElementById('activeGoals').textContent = data.goals.active;
+            document.getElementById('totalGoals').textContent = `Total: ${data.goals.total} | Completed: ${data.goals.completed}`;
+
+            // Budget
+            document.getElementById('totalBudget').textContent = formatINR(data.budgets.total);
+            document.getElementById('budgetSpent').textContent = formatINR(data.budgets.spent);
+            document.getElementById('budgetRemaining').textContent = formatINR(data.budgets.remaining);
+
+            const budgetPct = data.budgets.total > 0 ?
+                Math.min((data.budgets.spent / data.budgets.total) * 100, 100) : 0;
+            document.getElementById('budgetProgress').style.width = `${budgetPct}%`;
+            if (budgetPct >= 90) document.getElementById('budgetProgress').style.backgroundColor = '#c0392b';
+            else if (budgetPct >= 80) document.getElementById('budgetProgress').style.backgroundColor = '#e67e22';
+
+            // Breach Alerts
+            if (data.budgets.breachAlerts.length > 0) {
+                document.getElementById('breachCard').style.display = 'block';
+                document.getElementById('breachAlerts').innerHTML = data.budgets.breachAlerts
+                    .map(a => `<div class="insight-item">${a.alert} <strong>${a.category}</strong> — ₹${a.spent} of ₹${a.monthlyLimit} (${a.percentage}%)</div>`)
+                    .join('');
+            }
+
+            // Insights
+            if (data.insights.length > 0) {
+                document.getElementById('insights').innerHTML = data.insights
+                    .map(i => `<div class="insight-item">${i}</div>`)
+                    .join('');
+            }
+
+        } catch (err) {
+            console.error('Dashboard error:', err);
+        }
+    }
+
+    loadDashboard();
+</script>
+
+</body>
+</html>

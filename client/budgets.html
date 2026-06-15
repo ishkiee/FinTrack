@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budgets | FinTrack</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <a href="dashboard.html" class="logo">FinTrack</a>
+    <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="income.html">Income</a>
+        <a href="goals.html">Goals</a>
+        <a href="budgets.html" class="active">Budgets</a>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </nav>
+</div>
+
+<div class="container">
+    <p class="page-title">Budgets</p>
+
+    <!-- Add Budget Form -->
+    <div class="card">
+        <h3>Add Budget</h3>
+        <div id="alert" class="alert" style="display:none;"></div>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="category">
+                <option value="">Select category</option>
+                <option>Food</option>
+                <option>Transport</option>
+                <option>Shopping</option>
+                <option>Entertainment</option>
+                <option>Health</option>
+                <option>Travel</option>
+                <option>Education</option>
+                <option>Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Monthly Limit (₹)</label>
+            <input type="number" id="monthlyLimit" placeholder="e.g. 5000">
+        </div>
+        <button class="btn btn-primary" onclick="addBudget()">Add Budget</button>
+    </div>
+
+    <!-- Budget List -->
+    <div id="budgetsList"></div>
+</div>
+
+<!-- Update Modal -->
+<div id="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:999; justify-content:center; align-items:center;">
+    <div style="background:var(--card); padding:30px; border-radius:14px; width:100%; max-width:400px;">
+        <h3 style="color:var(--primary); margin-bottom:16px;">Update Monthly Limit</h3>
+        <div class="form-group">
+            <label>New Monthly Limit (₹)</label>
+            <input type="number" id="updateLimit" placeholder="Enter new limit">
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" onclick="submitUpdate()">Update</button>
+            <button class="btn" style="background:var(--card); border:1.5px solid var(--primary);" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    let selectedBudgetId = null;
+
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'login.html';
+    }
+
+    function showAlert(message, type = 'error') {
+        const alert = document.getElementById('alert');
+        alert.textContent = message;
+        alert.className = `alert alert-${type}`;
+        alert.style.display = 'block';
+        setTimeout(() => alert.style.display = 'none', 3000);
+    }
+
+    function openModal(id, limit) {
+        selectedBudgetId = id;
+        document.getElementById('updateLimit').value = limit;
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('modal').style.display = 'none';
+        selectedBudgetId = null;
+    }
+
+    async function loadBudgets() {
+        try {
+            const res = await fetch('http://localhost:5000/api/budgets', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('budgetsList').innerHTML = '<div class="empty-state">No budgets yet</div>';
+                return;
+            }
+
+            // Also fetch expenses for this month to show spending per category
+            const expRes = await fetch('http://localhost:5000/api/analytics/categories', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const expData = await expRes.json();
+            const categoryMap = {};
+            expData.categorySpending.forEach(c => categoryMap[c.category.toLowerCase()] = c.total);
+
+            document.getElementById('budgetsList').innerHTML = data.map(b => {
+                const spent = categoryMap[b.category.toLowerCase()] || 0;
+                const pct = Math.min(Math.round((spent / b.monthlyLimit) * 100), 100);
+                let barColor = 'var(--primary)';
+                let statusLabel = '';
+                if (pct >= 100) { barColor = '#c0392b'; statusLabel = '🔴 Exceeded'; }
+                else if (pct >= 90) { barColor = '#e67e22'; statusLabel = '🟠 90% Warning'; }
+                else if (pct >= 80) { barColor = '#f39c12'; statusLabel = '🟡 80% Warning'; }
+
+                return `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <div>
+                                <h3>${b.category} ${statusLabel}</h3>
+                                <p style="font-size:0.9rem; margin-bottom:4px;">
+                                    Spent: ₹${spent.toLocaleString('en-IN')} of ₹${b.monthlyLimit.toLocaleString('en-IN')}
+                                </p>
+                                <p style="font-size:0.85rem; color:#666;">
+                                    Remaining: ₹${(b.monthlyLimit - spent).toLocaleString('en-IN')}
+                                </p>
+                            </div>
+                            <span style="font-size:1.2rem; font-weight:700; color:var(--primary);">${pct}%</span>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar" style="width:${pct}%; background-color:${barColor};"></div>
+                        </div>
+                        <div style="margin-top:12px; display:flex; gap:10px;">
+                            <button class="btn btn-accent" onclick="openModal('${b._id}', ${b.monthlyLimit})">Update Limit</button>
+                            <button class="btn btn-danger" onclick="deleteBudget('${b._id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function addBudget() {
+        const category = document.getElementById('category').value;
+        const monthlyLimit = document.getElementById('monthlyLimit').value;
+
+        if (!category || !monthlyLimit) {
+            showAlert('Please fill in all fields.');
+            return;
+        }
+
+        try {
+            const res = await fetch('http://localhost:5000/api/budgets', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ category, monthlyLimit })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                showAlert(data.message || 'Failed to add budget.');
+                return;
+            }
+
+            showAlert('Budget added successfully!', 'success');
+            document.getElementById('category').value = '';
+            document.getElementById('monthlyLimit').value = '';
+            loadBudgets();
+        } catch (err) {
+            showAlert('Server error. Please try again.');
+        }
+    }
+
+    async function submitUpdate() {
+        const monthlyLimit = document.getElementById('updateLimit').value;
+        if (!monthlyLimit) return;
+
+        try {
+            await fetch(`http://localhost:5000/api/budgets/${selectedBudgetId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ monthlyLimit })
+            });
+            closeModal();
+            loadBudgets();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function deleteBudget(id) {
+        if (!confirm('Delete this budget?')) return;
+        try {
+            await fetch(`http://localhost:5000/api/budgets/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            loadBudgets();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    loadBudgets();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goals | FinTrack</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<div class="navbar">
+    <a href="dashboard.html" class="logo">FinTrack</a>
+    <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="income.html">Income</a>
+        <a href="goals.html" class="active">Goals</a>
+        <a href="budgets.html">Budgets</a>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </nav>
+</div>
+
+<div class="container">
+    <p class="page-title">Goals</p>
+
+    <!-- Add Goal Form -->
+    <div class="card">
+        <h3>Add Goal</h3>
+        <div id="alert" class="alert" style="display:none;"></div>
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" id="title" placeholder="e.g. Laptop">
+        </div>
+        <div class="form-group">
+            <label>Target Amount (₹)</label>
+            <input type="number" id="targetAmount" placeholder="e.g. 80000">
+        </div>
+        <div class="form-group">
+            <label>Current Amount (₹)</label>
+            <input type="number" id="currentAmount" placeholder="e.g. 20000">
+        </div>
+        <div class="form-group">
+            <label>Deadline</label>
+            <input type="date" id="deadline">
+        </div>
+        <button class="btn btn-primary" onclick="addGoal()">Add Goal</button>
+    </div>
+
+    <!-- Goals List -->
+    <div id="goalsList"></div>
+</div>
+
+<!-- Update Modal -->
+<div id="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:999; justify-content:center; align-items:center;">
+    <div style="background:var(--card); padding:30px; border-radius:14px; width:100%; max-width:400px;">
+        <h3 style="color:var(--primary); margin-bottom:16px;">Update Progress</h3>
+        <div class="form-group">
+            <label>Current Amount (₹)</label>
+            <input type="number" id="updateAmount" placeholder="Enter current savings">
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" onclick="submitUpdate()">Update</button>
+            <button class="btn" style="background:var(--card); border:1.5px solid var(--primary);" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    let selectedGoalId = null;
+
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'login.html';
+    }
+
+    function showAlert(message, type = 'error') {
+        const alert = document.getElementById('alert');
+        alert.textContent = message;
+        alert.className = `alert alert-${type}`;
+        alert.style.display = 'block';
+        setTimeout(() => alert.style.display = 'none', 3000);
+    }
+
+    function openModal(id, current) {
+        selectedGoalId = id;
+        document.getElementById('updateAmount').value = current;
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('modal').style.display = 'none';
+        selectedGoalId = null;
+    }
+
+    async function loadGoals() {
+        try {
+            const res = await fetch('http://localhost:5000/api/goals', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('goalsList').innerHTML = '<div class="empty-state">No goals yet</div>';
+                return;
+            }
+
+            document.getElementById('goalsList').innerHTML = data.map(g => {
+                const pct = Math.min(Math.round((g.currentAmount / g.targetAmount) * 100), 100);
+                const completed = g.currentAmount >= g.targetAmount;
+                return `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <div>
+                                <h3>${g.title} ${completed ? '✅' : ''}</h3>
+                                <p style="font-size:0.9rem; margin-bottom:4px;">
+                                    ₹${g.currentAmount.toLocaleString('en-IN')} of ₹${g.targetAmount.toLocaleString('en-IN')}
+                                </p>
+                                <p style="font-size:0.85rem; color:#666;">
+                                    Deadline: ${new Date(g.deadline).toLocaleDateString('en-IN')}
+                                </p>
+                            </div>
+                            <div style="text-align:right;">
+                                <span style="font-size:1.2rem; font-weight:700; color:var(--primary);">${pct}%</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar" style="width:${pct}%; background-color:${completed ? 'var(--success)' : 'var(--primary)'}"></div>
+                        </div>
+                        <div style="margin-top:12px; display:flex; gap:10px;">
+                            <button class="btn btn-accent" onclick="openModal('${g._id}', ${g.currentAmount})">Update Progress</button>
+                            <button class="btn btn-danger" onclick="deleteGoal('${g._id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function addGoal() {
+        const title = document.getElementById('title').value.trim();
+        const targetAmount = document.getElementById('targetAmount').value;
+        const currentAmount = document.getElementById('currentAmount').value || 0;
+        const deadline = document.getElementById('deadline').value;
+
+        if (!title || !targetAmount || !deadline) {
+            showAlert('Please fill in all required fields.');
+            return;
+        }
+
+        try {
+            const res = await fetch('http://localhost:5000/api/goals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ title, targetAmount, currentAmount, deadline })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                showAlert(data.message || 'Failed to add goal.');
+                return;
+            }
+
+            showAlert('Goal added successfully!', 'success');
+            document.getElementById('title').value = '';
+            document.getElementById('targetAmount').value = '';
+            document.getElementById('currentAmount').value = '';
+            document.getElementById('deadline').value = '';
+            loadGoals();
+        } catch (err) {
+            showAlert('Server error. Please try again.');
+        }
+    }
+
+    async function submitUpdate() {
+        const currentAmount = document.getElementById('updateAmount').value;
+        if (!currentAmount) return;
+
+        try {
+            await fetch(`http://localhost:5000/api/goals/${selectedGoalId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ currentAmount })
+            });
+            closeModal();
+            loadGoals();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function deleteGoal(id) {
+        if (!confirm('Delete this goal?')) return;
+        try {
+            await fetch(`http://localhost:5000/api/goals/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            loadGoals();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    loadGoals();
+</script>
+
+</body>
+</html>
