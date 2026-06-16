@@ -73,41 +73,26 @@ A personal finance management web app to track expenses, income, goals and budge
 | Goal Prediction | GET | /api/goals/predict/:id |
 
 ## Project Structure
+## Project Structure
+
+```text
 track_finance/
-
 ├── client/
-
 │   ├── css/
-
-│   │   └── style.css
-
 │   ├── login.html
-
 │   ├── register.html
-
 │   ├── dashboard.html
-
 │   ├── expenses.html
-
 │   ├── income.html
-
 │   ├── goals.html
-
 │   └── budgets.html
 ├── screenshots/
-
 ├── server/
-
 │   ├── config/
-
 │   ├── controllers/
-
 │   ├── middleware/
-
 │   ├── models/
-
 │   ├── routes/
-
 │   └── server.js
-
 └── README.md
+```
