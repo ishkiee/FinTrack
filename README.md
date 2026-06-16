@@ -6,7 +6,8 @@ A personal finance management web app to track expenses, income, goals and budge
 ![Dashboard](screenshots/dashboard.png)
 
 ## Screenshots
-
+![Register](screenshots/register.png)
+![Login](screenshots/login.png)
 ![Expenses](screenshots/expenses.png)
 ![Goals](screenshots/goals.png)
 ![Budgets](screenshots/budgets.png)
@@ -72,7 +73,7 @@ A personal finance management web app to track expenses, income, goals and budge
 | Predictions | GET | /api/predictions/budget |
 | Goal Prediction | GET | /api/goals/predict/:id |
 
-## Project Structure
+
 ## Project Structure
 
 ```text
